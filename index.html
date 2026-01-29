@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบเปิด-ปิดงาน</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">ระบบจัดการการเปิด-ปิดงาน</h1>
+            <p class="text-gray-600">Job Opening & Closing Management System</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- เปิดงาน -->
+            <section class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4 text-blue-600">
+                    <i class="bi bi-folder-plus"></i> เปิดงาน
+                </h2>
+                <form id="openJobForm">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="machineName">
+                            ชื่อเครื่องจักร <span class="text-red-500">*</span>
+                        </label>
+                        <input type="text" id="machineName" name="machineName" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               placeholder="กรอกชื่อเครื่องจักร">
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="openDate">
+                            วันที่เปิดงาน <span class="text-red-500">*</span>
+                        </label>
+                        <input type="date" id="openDate" name="openDate" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">
+                            รูปภาพประกอบการเปิดงาน
+                        </label>
+                        <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                            <input type="file" id="openImages" multiple accept="image/*" class="hidden">
+                            <label for="openImages" class="cursor-pointer">
+                                <i class="bi bi-cloud-upload text-3xl text-gray-400"></i>
+                                <p class="mt-2 text-sm text-gray-600">คลิกเพื่อเลือกรูปภาพ (สามารถเลือกได้หลายรูป)</p>
+                            </label>
+                        </div>
+                        <div id="openImagePreview" class="mt-4 grid grid-cols-3 gap-2"></div>
+                    </div>
+
+                    <button type="submit" class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition duration-200">
+                        <i class="bi bi-plus-circle"></i> เปิดงาน
+                    </button>
+                </form>
+            </section>
+
+            <!-- ปิดงาน -->
+            <section class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4 text-green-600">
+                    <i class="bi bi-folder-check"></i> ปิดงาน
+                </h2>
+                <form id="closeJobForm">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="jobSelect">
+                            เลือกงานที่ต้องการปิด <span class="text-red-500">*</span>
+                        </label>
+                        <select id="jobSelect" name="jobSelect" required
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
+                            <option value="">-- เลือกงาน --</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="closeDate">
+                            วันที่ปิดงาน <span class="text-red-500">*</span>
+                        </label>
+                        <input type="date" id="closeDate" name="closeDate" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">
+                            รูปภาพประกอบการปิดงาน
+                        </label>
+                        <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                            <input type="file" id="closeImages" multiple accept="image/*" class="hidden">
+                            <label for="closeImages" class="cursor-pointer">
+                                <i class="bi bi-cloud-upload text-3xl text-gray-400"></i>
+                                <p class="mt-2 text-sm text-gray-600">คลิกเพื่อเลือกรูปภาพ (สามารถเลือกได้หลายรูป)</p>
+                            </label>
+                        </div>
+                        <div id="closeImagePreview" class="mt-4 grid grid-cols-3 gap-2"></div>
+                    </div>
+
+                    <button type="submit" class="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition duration-200">
+                        <i class="bi bi-check-circle"></i> ปิดงาน
+                    </button>
+                </form>
+            </section>
+        </div>
+
+        <!-- รายการงาน -->
+        <section class="mt-8 bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">
+                <i class="bi bi-list-ul"></i> รายการงานทั้งหมด
+            </h2>
+            
+            <!-- ตัวกรอง -->
+            <div class="mb-4 flex flex-wrap gap-2">
+                <button onclick="filterJobs('all')" class="filter-btn px-4 py-2 rounded-md bg-gray-600 text-white">
+                    ทั้งหมด
+                </button>
+                <button onclick="filterJobs('open')" class="filter-btn px-4 py-2 rounded-md bg-blue-600 text-white">
+                    งานที่เปิด
+                </button>
+                <button onclick="filterJobs('closed')" class="filter-btn px-4 py-2 rounded-md bg-green-600 text-white">
+                    งานที่ปิดแล้ว
+                </button>
+            </div>
+
+            <div id="jobList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- รายการงานจะแสดงที่นี่ -->
+            </div>
+
+            <div id="emptyState" class="text-center py-8 text-gray-500">
+                <i class="bi bi-inbox text-4xl"></i>
+                <p class="mt-2">ยังไม่มีรายการงาน</p>
+            </div>
+        </section>
+    </div>
+
+    <!-- Modal สำหรับดูรูปภาพ -->
+    <div id="imageModal" class="fixed inset-0 bg-black bg-opacity-75 hidden z-50 flex items-center justify-center">
+        <div class="relative max-w-4xl max-h-screen p-4">
+            <button onclick="closeImageModal()" class="absolute top-2 right-2 text-white text-2xl z-10">
+                <i class="bi bi-x-circle"></i>
+            </button>
+            <img id="modalImage" src="" alt="รูปภาพ" class="max-w-full max-h-full rounded-lg">
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

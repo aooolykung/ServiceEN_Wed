@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.image-preview {
+  @apply relative overflow-hidden rounded-lg shadow-md transition-transform duration-300 hover:scale-105;
+}
+
+.image-preview img {
+  @apply w-full h-32 object-cover;
+}
+
+.image-preview .remove-btn {
+  @apply absolute top-2 right-2 bg-red-600 text-white border-none rounded-full w-6 h-6 cursor-pointer flex items-center justify-center opacity-0 transition-opacity duration-300 hover:bg-red-700;
+}
+
+.image-preview:hover .remove-btn {
+  @apply opacity-100;
+}
+
+.job-card {
+  @apply border border-gray-200 rounded-lg p-4 transition-all duration-300 cursor-pointer hover:shadow-lg hover:-translate-y-1;
+}
+
+.job-card.open {
+  @apply border-l-4 border-l-blue-500;
+}
+
+.job-card.closed {
+  @apply border-l-4 border-l-green-500;
+}
+
+.status-badge {
+  @apply inline-block px-2 py-1 rounded text-xs font-semibold uppercase;
+}
+
+.status-badge.open {
+  @apply bg-blue-100 text-blue-800;
+}
+
+.status-badge.closed {
+  @apply bg-green-100 text-green-800;
+}
+
+.thumbnail-grid {
+  @apply grid grid-cols-6 gap-1 mt-2;
+}
+
+.thumbnail {
+  @apply w-full h-10 object-cover rounded cursor-pointer transition-transform duration-200 hover:scale-110;
+}
+
+.upload-area {
+  @apply border-2 border-dashed border-gray-300 rounded-lg p-4 text-center transition-all duration-300 hover:border-blue-500 hover:bg-gray-50;
+}
+
+.filter-btn {
+  @apply px-4 py-2 rounded-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md;
+}
+
+.filter-btn.active {
+  @apply ring-2 ring-blue-500 ring-offset-2;
+}
+
+.fade-in {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from { 
+    opacity: 0; 
+    transform: translateY(10px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+.loading {
+  @apply inline-block w-5 h-5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin;
+}
