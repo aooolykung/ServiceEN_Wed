@@ -16,27 +16,85 @@ const CloseJobForm = ({ jobs, onSubmit, disabled }) => {
     }));
   };
 
-  const handleImageUpload = (e) => {
-    const files = Array.from(e.target.files);
-    
-    files.forEach(file => {
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const imageData = {
-            id: Date.now() + Math.random(),
-            name: file.name,
-            data: event.target.result,
-            file: file // Store the actual file for Google Drive upload
-          };
-          setFormData(prev => ({
-            ...prev,
-            closeImages: [...prev.closeImages, imageData]
-          }));
+  // Compress image for iOS compatibility
+  const compressImage = (file, maxWidth = 800, quality = 0.7) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // Scale down if too large
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Convert to compressed JPEG
+          const compressedData = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedData);
         };
-        reader.readAsDataURL(file);
-      }
+        img.onerror = () => {
+          // If image fails to load, use original data
+          resolve(e.target.result);
+        };
+        img.src = e.target.result;
+      };
+      reader.onerror = () => {
+        resolve(null);
+      };
+      reader.readAsDataURL(file);
     });
+  };
+
+  const handleImageUpload = async (e) => {
+    const files = Array.from(e.target.files);
+
+    for (const file of files) {
+      if (file.type.startsWith('image/')) {
+        try {
+          // Compress image for iOS
+          const compressedData = await compressImage(file, 800, 0.6);
+
+          if (compressedData) {
+            const imageData = {
+              id: Date.now() + Math.random(),
+              name: file.name,
+              data: compressedData
+            };
+            setFormData(prev => ({
+              ...prev,
+              closeImages: [...prev.closeImages, imageData]
+            }));
+          }
+        } catch (err) {
+          console.error('Error processing image:', err);
+          // Fallback to FileReader without compression
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const imageData = {
+              id: Date.now() + Math.random(),
+              name: file.name,
+              data: event.target.result
+            };
+            setFormData(prev => ({
+              ...prev,
+              closeImages: [...prev.closeImages, imageData]
+            }));
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+    }
   };
 
   const removeImage = (imageId) => {
@@ -52,16 +110,16 @@ const CloseJobForm = ({ jobs, onSubmit, disabled }) => {
       alert('กรุณาเลือกงานที่ต้องการปิด');
       return;
     }
-    
+
     // Get the first image file for Google Drive upload
     const imageFile = formData.closeImages.length > 0 ? formData.closeImages[0] : null;
-    
+
     onSubmit(formData.jobId, {
       closeDate: formData.closeDate,
       closeImages: formData.closeImages,
       imageFile: imageFile
     });
-    
+
     setFormData({
       jobId: '',
       closeDate: new Date().toISOString().split('T')[0],
@@ -126,15 +184,15 @@ const CloseJobForm = ({ jobs, onSubmit, disabled }) => {
             className="hidden"
             disabled={disabled}
           />
-          <label 
-            htmlFor="closeImages" 
+          <label
+            htmlFor="closeImages"
             className={`${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
           >
             <Upload className="mx-auto text-gray-400 mb-2" size={48} />
             <p className="text-sm text-gray-600">คลิกเพื่อเลือกรูปภาพ (สามารถเลือกได้หลายรูป)</p>
           </label>
         </div>
-        
+
         {formData.closeImages.length > 0 && (
           <div className="mt-4 grid grid-cols-3 gap-2">
             {formData.closeImages.map(image => (

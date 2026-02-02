@@ -19,27 +19,85 @@ const OpenJobForm = ({ onSubmit, electricalResponsibleUsers }) => {
     }));
   };
 
-  const handleImageUpload = (e) => {
+  // Compress image for iOS compatibility
+  const compressImage = (file, maxWidth = 800, quality = 0.7) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // Scale down if too large
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Convert to compressed JPEG
+          const compressedData = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedData);
+        };
+        img.onerror = () => {
+          // If image fails to load, use original data
+          resolve(e.target.result);
+        };
+        img.src = e.target.result;
+      };
+      reader.onerror = () => {
+        resolve(null);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleImageUpload = async (e) => {
     const files = Array.from(e.target.files);
 
-    files.forEach(file => {
+    for (const file of files) {
       if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const imageData = {
-            id: Date.now() + Math.random(),
-            name: file.name,
-            data: event.target.result,
-            file: file // Store the actual file for Google Drive upload
+        try {
+          // Compress image for iOS
+          const compressedData = await compressImage(file, 800, 0.6);
+
+          if (compressedData) {
+            const imageData = {
+              id: Date.now() + Math.random(),
+              name: file.name,
+              data: compressedData
+            };
+            setFormData(prev => ({
+              ...prev,
+              openImages: [...prev.openImages, imageData]
+            }));
+          }
+        } catch (err) {
+          console.error('Error processing image:', err);
+          // Fallback to FileReader without compression
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const imageData = {
+              id: Date.now() + Math.random(),
+              name: file.name,
+              data: event.target.result
+            };
+            setFormData(prev => ({
+              ...prev,
+              openImages: [...prev.openImages, imageData]
+            }));
           };
-          setFormData(prev => ({
-            ...prev,
-            openImages: [...prev.openImages, imageData]
-          }));
-        };
-        reader.readAsDataURL(file);
+          reader.readAsDataURL(file);
+        }
       }
-    });
+    }
   };
 
   const removeImage = (imageId) => {
@@ -174,9 +232,9 @@ const OpenJobForm = ({ onSubmit, electricalResponsibleUsers }) => {
 
       <button
         type="submit"
-        className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition duration-200 flex items-center justify-center"
+        className="w-full min-h-12 bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 active:bg-blue-800 transition duration-200 flex items-center justify-center text-base sm:text-lg font-medium touch-manipulation"
       >
-        <Plus className="mr-2" size={20} />
+        <Plus className="mr-2" size={24} />
         เปิดงาน
       </button>
     </form>

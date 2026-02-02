@@ -11,10 +11,23 @@
 }
 
 .image-preview .remove-btn {
-  @apply absolute top-2 right-2 bg-red-600 text-white border-none rounded-full w-6 h-6 cursor-pointer flex items-center justify-center opacity-0 transition-opacity duration-300 hover:bg-red-700;
+  @apply absolute top-2 right-2 bg-red-600 text-white border-none rounded-full w-8 h-8 cursor-pointer flex items-center justify-center transition-opacity duration-300 hover:bg-red-700;
+  /* Show remove button on touch devices (mobile) */
+  opacity: 0.8;
 }
 
-.image-preview:hover .remove-btn {
+@media (hover: hover) {
+  /* Only hide on devices that support hover (desktop) */
+  .image-preview .remove-btn {
+    opacity: 0;
+  }
+  .image-preview:hover .remove-btn {
+    @apply opacity-100;
+  }
+}
+
+.image-preview:active .remove-btn,
+.image-preview:focus-within .remove-btn {
   @apply opacity-100;
 }
 

@@ -17,7 +17,7 @@ export const signInWithGoogle = async () => {
       redirectTo: window.location.origin
     }
   });
-  
+
   if (error) throw error;
   return data;
 };
@@ -44,12 +44,12 @@ export const checkUserAllowed = async (email) => {
     .select('email, user_name, position, is_electrical_responsible')
     .eq('email', email.toLowerCase())
     .maybeSingle();
-  
+
   if (error) {
     console.error('checkUserAllowed: Error:', error);
     throw error;
   }
-  
+
   return data;
 };
 
@@ -61,7 +61,7 @@ export const getElectricalResponsibleUsers = async () => {
       .select('email, user_name, position')
       .eq('is_electrical_responsible', true)
       .order('user_name');
-    
+
     if (error) throw error;
     return data || [];
   } catch (error) {
@@ -85,18 +85,18 @@ export const createTimeRecord = async (record) => {
     user_name: record.userName,
     created_at: new Date().toISOString()
   };
-  
+
   const { data, error } = await supabase
     .from('time_records')
     .insert([insertData])
     .select()
     .single();
-  
+
   if (error) {
     console.error('Supabase error creating time record:', error);
     throw error;
   }
-  
+
   return data;
 };
 
@@ -105,11 +105,11 @@ export const getTimeRecords = async (userEmail = null) => {
     .from('time_records')
     .select('*')
     .order('created_at', { ascending: false });
-  
+
   if (userEmail) {
     query = query.eq('user_email', userEmail);
   }
-  
+
   const { data, error } = await query;
   if (error) throw error;
   return data;
@@ -122,12 +122,12 @@ export const getMultipleUserWageRates = async (userEmails) => {
       .from('allowed_users')
       .select('email, wage_rate, ot_rate')
       .in('email', userEmails);
-    
+
     if (error) {
       console.error('Error fetching multiple user wage rates:', error);
       return {};
     }
-    
+
     const wageRates = {};
     data.forEach(user => {
       wageRates[user.email] = {
@@ -135,7 +135,7 @@ export const getMultipleUserWageRates = async (userEmails) => {
         ot_rate: user.ot_rate || 525 // Default OT rate is now 525 (hourly)
       };
     });
-    
+
     return wageRates;
   } catch (error) {
     console.error('Exception fetching multiple user wage rates:', error);
@@ -148,7 +148,7 @@ export const deleteTimeRecord = async (id) => {
     .from('time_records')
     .delete()
     .eq('id', id);
-  
+
   if (error) {
     console.error('🗑️ supabase.js - Delete error:', error);
     throw error;
@@ -156,32 +156,59 @@ export const deleteTimeRecord = async (id) => {
 };
 
 export const createJob = async (job) => {
-  const insertData = {
-    machine_name: job.machineName,
-    job_name: job.jobName || job.machineName,
-    open_date: job.openDate,
-    status: 'open',
-    open_images: job.openImages || [],
-    drive_file_id: job.driveFileId,
-    drive_file_link: job.driveFileLink,
-    user_email: job.userEmail,
-    user_name: job.userName,
-    electrical_responsible: job.electricalResponsible, // Add electrical responsible
-    created_at: new Date().toISOString()
-  };
-  
-  const { data, error } = await supabase
-    .from('jobs')
-    .insert([insertData])
-    .select()
-    .single();
-  
-  if (error) {
-    console.error('Supabase error:', error);
-    throw error;
+  try {
+    // Process images - limit size for iOS compatibility
+    let processedImages = [];
+    if (job.openImages && Array.isArray(job.openImages)) {
+      processedImages = job.openImages
+        .filter(img => img && img.data)
+        .map(img => ({
+          id: img.id || Date.now(),
+          name: img.name || 'image',
+          // Only include image data if it's not too large (iOS limit)
+          data: typeof img.data === 'string' && img.data.length < 300000 ? img.data : null
+        }))
+        .filter(img => img.data !== null);
+    }
+
+    const insertData = {
+      machine_name: job.machineName || '',
+      job_name: job.jobName || job.machineName || '',
+      open_date: job.openDate || new Date().toISOString().split('T')[0],
+      status: 'open',
+      open_images: processedImages,
+      drive_file_id: job.driveFileId || null,
+      drive_file_link: job.driveFileLink || null,
+      user_email: job.userEmail || '',
+      user_name: job.userName || '',
+      electrical_responsible: job.electricalResponsible || null,
+      created_at: new Date().toISOString()
+    };
+
+    console.log('📤 supabase.js - Sending job data:', {
+      machine_name: insertData.machine_name,
+      open_date: insertData.open_date,
+      user_email: insertData.user_email,
+      images_count: processedImages.length
+    });
+
+    const { data, error } = await supabase
+      .from('jobs')
+      .insert([insertData])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ supabase.js - Supabase error:', error);
+      throw new Error(error.message || 'Database error');
+    }
+
+    console.log('✅ supabase.js - Job created:', data?.id);
+    return data;
+  } catch (err) {
+    console.error('❌ supabase.js - createJob exception:', err);
+    throw err;
   }
-  
-  return data;
 };
 
 export const updateJob = async (id, updates) => {
@@ -194,7 +221,7 @@ export const updateJob = async (id, updates) => {
     .eq('id', id)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -204,11 +231,11 @@ export const getJobs = async (userEmail = null) => {
     .from('jobs')
     .select('*')
     .order('created_at', { ascending: false });
-  
+
   if (userEmail) {
     query = query.eq('user_email', userEmail);
   }
-  
+
   const { data, error } = await query;
   if (error) throw error;
   return data;
@@ -219,7 +246,7 @@ export const deleteJob = async (id) => {
     .from('jobs')
     .delete()
     .eq('id', id);
-  
+
   if (error) throw error;
 };
 
@@ -230,13 +257,13 @@ export const getMachineCostcenter = async (machineId) => {
       console.warn('Machine ID is required');
       return null;
     }
-    
+
     const { data, error } = await supabase
       .from('machine_costcenter')
       .select('costcenter')
       .eq('machine_id', machineId)
       .maybeSingle(); // Use maybeSingle instead of single
-    
+
     if (error) {
       console.error('Supabase error for costcenter:', { machineId, error });
       if (error.code === 'PGRST116') {
@@ -246,7 +273,7 @@ export const getMachineCostcenter = async (machineId) => {
       }
       throw error;
     }
-    
+
     return data;
   } catch (error) {
     console.error('Error getting machine costcenter:', { machineId, error });
@@ -263,13 +290,13 @@ export const addAdditionalImages = async (jobId, newImages, imageType = 'close')
       .select('*')
       .eq('id', jobId)
       .single();
-    
+
     if (fetchError) throw fetchError;
-    
+
     // Add new images to existing images
     const existingImages = currentJob[imageType + '_images'] || [];
     const updatedImages = [...existingImages, ...newImages];
-    
+
     // Update job with new images
     const { data, error } = await supabase
       .from('jobs')
@@ -280,9 +307,9 @@ export const addAdditionalImages = async (jobId, newImages, imageType = 'close')
       .eq('id', jobId)
       .select()
       .single();
-    
+
     if (error) throw error;
-    
+
     return data;
   } catch (error) {
     console.error('📸 supabase.js - Error adding additional images:', error);
@@ -299,13 +326,13 @@ export const deleteJobImage = async (jobId, imageId, imageType = 'close') => {
       .select('*')
       .eq('id', jobId)
       .single();
-    
+
     if (fetchError) throw fetchError;
-    
+
     // Remove specific image from existing images
     const existingImages = currentJob[imageType + '_images'] || [];
     const updatedImages = existingImages.filter(img => img.id !== imageId);
-    
+
     // Update job with remaining images
     const { data, error } = await supabase
       .from('jobs')
@@ -316,9 +343,9 @@ export const deleteJobImage = async (jobId, imageId, imageType = 'close') => {
       .eq('id', jobId)
       .select()
       .single();
-    
+
     if (error) throw error;
-    
+
     return data;
   } catch (error) {
     console.error('🗑️ supabase.js - Error deleting job image:', error);
@@ -334,7 +361,7 @@ export const getUserWageRates = async (email) => {
       .select('wage_rate, ot_rate')
       .eq('email', email)
       .single();
-    
+
     if (error) throw error;
     return data;
   } catch (error) {

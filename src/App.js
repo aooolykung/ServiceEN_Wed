@@ -12,10 +12,10 @@ import SummaryPage from './components/SummaryPage';
 import ConfirmModal from './components/ConfirmModal';
 import AlertModal from './components/AlertModal';
 import { supabase } from './supabase';
-import { 
-  signInWithGoogle, 
-  signOut, 
-  onAuthStateChange, 
+import {
+  signInWithGoogle,
+  signOut,
+  onAuthStateChange,
   checkUserAllowed,
   getElectricalResponsibleUsers,
   getJobs,
@@ -59,12 +59,12 @@ function App() {
   // Simplified auth check
   useEffect(() => {
     let mounted = true;
-    
+
     const checkAuth = async () => {
       try {
         // Get current session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
+
         if (sessionError) {
           console.error('Session error:', sessionError);
           if (mounted) {
@@ -72,24 +72,24 @@ function App() {
           }
           return;
         }
-        
+
         if (!session?.user) {
           if (mounted) {
             setAuthStatus({ loading: false, user: null, allowed: false, error: '' });
           }
           return;
         }
-        
+
         // Check user permissions
         const email = session.user.email.toLowerCase();
         let userData = null;
-        
+
         try {
           userData = await checkUserAllowed(email);
         } catch (error) {
           console.error('Error checking user:', error);
         }
-        
+
         if (mounted) {
           if (email && adminEmails.has(email)) {
             // Admin user
@@ -119,7 +119,7 @@ function App() {
               error: `อีเมล ${email} ยังไม่ได้รับอนุญาต`
             });
           }
-          
+
           // Load data immediately after auth is successful
           if (userData || adminEmails.has(email)) {
             try {
@@ -136,7 +136,7 @@ function App() {
             }
           }
         }
-        
+
       } catch (error) {
         console.error('Auth check failed:', error);
         if (mounted) {
@@ -144,33 +144,33 @@ function App() {
         }
       }
     };
-    
+
     // Set timeout to prevent infinite loading
     const timeoutId = setTimeout(() => {
       if (mounted) {
         setAuthStatus(prev => ({ ...prev, loading: false }));
       }
     }, 5000);
-    
+
     checkAuth();
-    
+
     // Listen for auth changes
     const { data: { subscription } } = onAuthStateChange(async (event, session) => {
       if (!mounted) return;
-      
+
       if (event === 'SIGNED_OUT' || !session?.user) {
         setAuthStatus({ loading: false, user: null, allowed: false, error: '' });
         setJobs([]);
         setTimeRecords([]);
         return;
       }
-      
+
       if (event === 'SIGNED_IN' && session?.user) {
         // Re-check permissions on sign in
         await checkAuth();
       }
     });
-    
+
     return () => {
       mounted = false;
       clearTimeout(timeoutId);
@@ -243,18 +243,57 @@ function App() {
 
   const handleOpenJob = async (jobData) => {
     try {
-      const newJob = await createJob({
-        ...jobData,
-        jobName: jobData.machineName,
+      // Validate required fields
+      if (!jobData.machineName || !jobData.machineName.trim()) {
+        showAlert('⚠️ ข้อมูลไม่ครบถ้วน', 'กรุณากรอกชื่อเครื่องจักร', 'warning');
+        return;
+      }
+
+      // Check auth status
+      if (!authStatus.user || !authStatus.user.email) {
+        showAlert('⚠️ ไม่พบข้อมูลผู้ใช้', 'กรุณาเข้าสู่ระบบใหม่', 'warning');
+        return;
+      }
+
+      // Prepare job data - limit image size for iOS compatibility
+      const processedImages = (jobData.openImages || []).map(img => ({
+        id: img.id,
+        name: img.name,
+        // Limit image data to prevent iOS memory issues
+        data: img.data && img.data.length > 500000 ? null : img.data
+      })).filter(img => img.data !== null);
+
+      const jobToCreate = {
+        machineName: jobData.machineName.trim(),
+        jobName: jobData.machineName.trim(),
+        openDate: jobData.openDate,
+        openImages: processedImages,
+        electricalResponsible: jobData.electricalResponsible || '',
         userEmail: authStatus.user.email,
         userName: authStatus.userName
-      });
-      
+      };
+
+      console.log('📝 Creating job:', JSON.stringify(jobToCreate, null, 2));
+
+      const newJob = await createJob(jobToCreate);
+
+      console.log('✅ Job created successfully:', newJob);
+
       setJobs(prev => [newJob, ...prev]);
+      showAlert('✅ เปิดงานสำเร็จ!', `สร้างงานของเครื่อง ${jobData.machineName} เรียบร้อยแล้ว`, 'success');
       showNotification('เปิดงานสำเร็จ!', 'success');
     } catch (error) {
-      console.error('Error creating job:', error);
-      showNotification('เปิดงานไม่สำเร็จ', 'error');
+      console.error('❌ Error creating job:', error);
+      console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+
+      // Show user-friendly error message
+      const errorMessage = error.message || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ';
+      showAlert(
+        '❌ เปิดงานไม่สำเร็จ',
+        `${errorMessage}\n\nกรุณาลองใหม่อีกครั้ง หรือลองลดขนาดรูปภาพ`,
+        'error'
+      );
+      showNotification('เปิดงานไม่สำเร็จ: ' + errorMessage, 'error');
     }
   };
 
@@ -265,19 +304,19 @@ function App() {
       async () => {
         try {
           const updatedJob = await deleteJobImage(jobId, imageId, imageType);
-          
+
           setJobs(prev => {
-            const updated = prev.map(job => 
+            const updated = prev.map(job =>
               job.id === jobId ? updatedJob : job
             );
             return updated;
           });
-          
+
           // Update selectedJob if this is the currently viewed job
           if (selectedJob && selectedJob.id === jobId) {
             setSelectedJob(updatedJob);
           }
-          
+
           showNotification('ลบรูปภาพสำเร็จ!', 'success');
         } catch (error) {
           console.error('🗑️ App.js - Error deleting image:', error);
@@ -291,19 +330,19 @@ function App() {
   const handleAddAdditionalImages = async (jobId, newImages, imageType = 'close') => {
     try {
       const updatedJob = await addAdditionalImages(jobId, newImages, imageType);
-      
+
       setJobs(prev => {
-        const updated = prev.map(job => 
+        const updated = prev.map(job =>
           job.id === jobId ? updatedJob : job
         );
         return updated;
       });
-      
+
       // Update selectedJob if this is the currently viewed job
       if (selectedJob && selectedJob.id === jobId) {
         setSelectedJob(updatedJob);
       }
-      
+
       showNotification('เพิ่มรูปภาพเพิ่มเติมสำเร็จ!', 'success');
     } catch (error) {
       console.error('📸 App.js - Error adding additional images:', error);
@@ -319,8 +358,8 @@ function App() {
         close_date: new Date().toISOString().split('T')[0],
         close_images: []
       });
-      
-      setJobs(prev => prev.map(job => 
+
+      setJobs(prev => prev.map(job =>
         job.id === jobId ? updatedJob : job
       ));
       showNotification('ปิดงานสำเร็จ!', 'success');
@@ -337,8 +376,8 @@ function App() {
         close_date: closeData.closeDate,
         close_images: closeData.closeImages
       });
-      
-      setJobs(prev => prev.map(job => 
+
+      setJobs(prev => prev.map(job =>
         job.id === jobId ? updatedJob : job
       ));
       showNotification('ปิดงานสำเร็จ!', 'success');
@@ -351,7 +390,7 @@ function App() {
   const handleDeleteJob = async (jobId) => {
     const jobToDelete = jobs.find(j => j.id === jobId);
     if (!jobToDelete) return;
-    
+
     showConfirm(
       'ลบรายการงาน',
       `คุณแน่ใจว่าต้องการลบรายการงานนี้?\n\nเครื่อง: ${jobToDelete.machine_name || jobToDelete.machineName}\nวันที่เปิด: ${jobToDelete.open_date || jobToDelete.openDate}\nสถานะ: ${jobToDelete.status === 'open' ? 'เปิด' : 'ปิดแล้ว'}\n\nการดำเนินการนี้ไม่สามารถย้อนกลับได้`,
@@ -382,7 +421,7 @@ function App() {
   const handleAddTimeRecord = async (record) => {
     try {
       // Additional validation - check for any record on the same date (only one machine per day)
-      
+
       // Check in current state first - any record on the same date
       const existingRecord = timeRecords.find(existing => existing.date === record.date);
 
@@ -399,7 +438,7 @@ function App() {
       try {
         const dbRecords = await getTimeRecords();
         const dbExistingRecord = dbRecords.find(existing => existing.date === record.date);
-        
+
         if (dbExistingRecord) {
           showAlert(
             '⚠️ มีการบันทึกเวลาในวันนี้แล้ว',
@@ -417,7 +456,7 @@ function App() {
         userEmail: authStatus.user.email,
         userName: authStatus.userName
       });
-      
+
       // Add the new record to state immediately for instant validation
       const newRecord = {
         ...record,
@@ -427,16 +466,16 @@ function App() {
         user_email: authStatus.user.email,
         user_name: authStatus.userName
       };
-      
+
       setTimeRecords(prev => [...prev, newRecord]);
-      
+
       // Show prominent success alert
       showAlert(
         '✅ บันทึกเวลาสำเร็จ!',
         `เครื่อง ${record.machineId.toUpperCase()} - วันที่ ${record.date}\nเวลา: ${record.startTime} - ${record.endTime}\nระยะเวลาทำงาน: ${calculateWorkDuration(record.startTime, record.endTime)}\n\nฟอร์มถูกรีเซ็ตแล้ว สามารถบันทึกเวลาใหม่ได้`,
         'success'
       );
-      
+
       // Also show notification for consistency
       showNotification('บันทึกเวลาสำเร็จ!', 'success');
     } catch (error) {
@@ -455,9 +494,9 @@ function App() {
     const end = new Date(`2000-01-01T${endTime}`);
     const diffMs = end - start;
     const diffMinutes = Math.floor(diffMs / (1000 * 60));
-    
+
     if (diffMinutes <= 0) return '0 ชั่วโมง 0 นาที';
-    
+
     const hours = Math.floor(diffMinutes / 60);
     const minutes = diffMinutes % 60;
     return `${hours} ชั่วโมง ${minutes} นาที`;
@@ -465,23 +504,23 @@ function App() {
 
   const handleDeleteTimeRecord = async (recordId) => {
     const recordToDelete = timeRecords.find(r => r.id === recordId);
-    
+
     if (!recordToDelete) {
       return;
     }
-    
+
     showConfirm(
       'ลบบันทึกเวลา',
       `คุณแน่ใจว่าต้องการลบบันทึกเวลานี้?\n\nเครื่อง: ${(recordToDelete.machine_id || recordToDelete.machineId || '').toUpperCase()}\nวันที่: ${recordToDelete.date}\nเวลา: ${recordToDelete.startTime} - ${recordToDelete.endTime}\n\nการดำเนินการนี้ไม่สามารถย้อนกลับได้`,
       async () => {
         try {
           await deleteTimeRecord(recordId);
-          
+
           setTimeRecords(prev => {
             const filtered = prev.filter(record => record.id !== recordId);
             return filtered;
           });
-          
+
           showNotification('ลบบันทึกเวลาสำเร็จ', 'success');
           showAlert(
             '✅ ลบบันทึกเวลาสำเร็จ',
@@ -504,7 +543,7 @@ function App() {
 
   const getFilteredTimeRecords = () => {
     let filteredRecords = timeRecords;
-    
+
     // Filter by user name
     if (timeRecordFilters.userName.trim()) {
       const searchLower = timeRecordFilters.userName.toLowerCase();
@@ -513,7 +552,7 @@ function App() {
         return userName.includes(searchLower);
       });
     }
-    
+
     // Filter by date range
     if (timeRecordFilters.dateRange.startDate && timeRecordFilters.dateRange.endDate) {
       filteredRecords = filteredRecords.filter(record => {
@@ -523,20 +562,20 @@ function App() {
         return recordDate >= start && recordDate <= end;
       });
     }
-    
+
     return filteredRecords;
   };
 
   const getFilteredJobs = () => {
     let filteredJobs = jobs;
-    
+
     // Filter by status
     if (currentFilter === 'open') {
       filteredJobs = filteredJobs.filter(job => job.status === 'open');
     } else if (currentFilter === 'closed') {
       filteredJobs = filteredJobs.filter(job => job.status === 'closed');
     }
-    
+
     // Filter by search term
     if (searchTerm.trim()) {
       const searchLower = searchTerm.toLowerCase();
@@ -545,14 +584,14 @@ function App() {
         const userName = (job.user_name || '').toLowerCase();
         const jobName = (job.job_name || '').toLowerCase();
         const openDate = job.open_date || job.openDate || '';
-        
-        return machineName.includes(searchLower) || 
-               userName.includes(searchLower) || 
-               jobName.includes(searchLower) ||
-               openDate.includes(searchLower);
+
+        return machineName.includes(searchLower) ||
+          userName.includes(searchLower) ||
+          jobName.includes(searchLower) ||
+          openDate.includes(searchLower);
       });
     }
-    
+
     return filteredJobs;
   };
 
@@ -664,11 +703,11 @@ function App() {
     try {
       await signInWithGoogle();
     } catch (error) {
-      setAuthStatus(prev => ({ 
-        loading: false, 
-        user: null, 
-        allowed: false, 
-        error: 'เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่' 
+      setAuthStatus(prev => ({
+        loading: false,
+        user: null,
+        allowed: false,
+        error: 'เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่'
       }));
     }
   };
@@ -700,7 +739,7 @@ function App() {
     const loadTimeRecords = async () => {
       try {
         let records = await getTimeRecords();
-        
+
         // Apply date range filter only if dates are set
         if (dateRange.startDate && dateRange.endDate) {
           records = records.filter(record => {
@@ -710,7 +749,7 @@ function App() {
             return recordDate >= start && recordDate <= end;
           });
         }
-        
+
         // Only update timeRecords if we're on summary page to avoid conflicts
         if (currentPage === 'summary') {
           setTimeRecords(records);
@@ -788,39 +827,36 @@ function App() {
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">ระบบจัดการการเปิด-ปิดงาน</h1>
             <p className="text-sm sm:text-base text-gray-600">Job Opening & Closing Management System</p>
           </div>
-          
+
           {/* Navigation */}
           <div className="flex justify-center">
             <div className="inline-flex flex-col sm:flex-row rounded-lg border border-gray-200 bg-white p-1 w-full sm:w-auto max-w-sm sm:max-w-none">
               <button
                 onClick={() => setCurrentPage('jobs')}
-                className={`px-4 py-2 rounded-md flex items-center justify-center transition-colors w-full sm:w-auto ${
-                  currentPage === 'jobs' 
-                    ? 'bg-blue-600 text-white' 
+                className={`px-4 py-2 rounded-md flex items-center justify-center transition-colors w-full sm:w-auto ${currentPage === 'jobs'
+                    ? 'bg-blue-600 text-white'
                     : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
-                }`}
+                  }`}
               >
                 <Home className="mr-2" size={16} />
                 <span className="text-sm sm:text-base">จัดการงาน</span>
               </button>
               <button
                 onClick={() => setCurrentPage('time')}
-                className={`px-4 py-2 rounded-md flex items-center justify-center transition-colors w-full sm:w-auto ${
-                  currentPage === 'time' 
-                    ? 'bg-purple-600 text-white' 
+                className={`px-4 py-2 rounded-md flex items-center justify-center transition-colors w-full sm:w-auto ${currentPage === 'time'
+                    ? 'bg-purple-600 text-white'
                     : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
-                }`}
+                  }`}
               >
                 <Clock className="mr-2" size={16} />
                 <span className="text-sm sm:text-base">ลงเวลา</span>
               </button>
               <button
                 onClick={() => setCurrentPage('summary')}
-                className={`px-4 py-2 rounded-md flex items-center justify-center transition-colors w-full sm:w-auto ${
-                  currentPage === 'summary' 
-                    ? 'bg-green-600 text-white' 
+                className={`px-4 py-2 rounded-md flex items-center justify-center transition-colors w-full sm:w-auto ${currentPage === 'summary'
+                    ? 'bg-green-600 text-white'
                     : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
-                }`}
+                  }`}
               >
                 <TrendingUp className="mr-2" size={16} />
                 <span className="text-sm sm:text-base">สรุป</span>
@@ -863,8 +899,8 @@ function App() {
                   <FolderCheck className="text-green-600 mr-2" size={20} />
                   <h2 className="text-lg sm:text-xl font-semibold text-green-600">ปิดงาน</h2>
                 </div>
-                <CloseJobForm 
-                  jobs={openJobs} 
+                <CloseJobForm
+                  jobs={openJobs}
                   onSubmit={handleCloseJob}
                 />
               </div>
@@ -874,7 +910,7 @@ function App() {
             <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
               <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
                 <h2 className="text-lg sm:text-xl font-semibold text-gray-800">รายการงาน</h2>
-                
+
                 {/* Search Input */}
                 <div className="relative w-full lg:w-auto">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
@@ -887,36 +923,33 @@ function App() {
                   />
                 </div>
               </div>
-              
+
               {/* Filter Buttons */}
               <div className="flex flex-wrap gap-2 mb-6">
                 <button
                   onClick={() => setCurrentFilter('all')}
-                  className={`filter-btn px-3 sm:px-4 py-2 rounded-md text-white text-sm ${
-                    currentFilter === 'all' ? 'bg-gray-600 active' : 'bg-gray-500'
-                  }`}
+                  className={`filter-btn px-3 sm:px-4 py-2 rounded-md text-white text-sm ${currentFilter === 'all' ? 'bg-gray-600 active' : 'bg-gray-500'
+                    }`}
                 >
                   ทั้งหมด ({jobs.length})
                 </button>
                 <button
                   onClick={() => setCurrentFilter('open')}
-                  className={`filter-btn px-3 sm:px-4 py-2 rounded-md text-white text-sm ${
-                    currentFilter === 'open' ? 'bg-blue-600 active' : 'bg-blue-500'
-                  }`}
+                  className={`filter-btn px-3 sm:px-4 py-2 rounded-md text-white text-sm ${currentFilter === 'open' ? 'bg-blue-600 active' : 'bg-blue-500'
+                    }`}
                 >
                   เปิด ({openJobs.length})
                 </button>
                 <button
                   onClick={() => setCurrentFilter('closed')}
-                  className={`filter-btn px-3 sm:px-4 py-2 rounded-md text-white text-sm ${
-                    currentFilter === 'closed' ? 'bg-green-600 active' : 'bg-green-500'
-                  }`}
+                  className={`filter-btn px-3 sm:px-4 py-2 rounded-md text-white text-sm ${currentFilter === 'closed' ? 'bg-green-600 active' : 'bg-green-500'
+                    }`}
                 >
                   ปิด ({jobs.filter(job => job.status === 'closed').length})
                 </button>
               </div>
-              
-              <JobList 
+
+              <JobList
                 jobs={getFilteredJobs()}
                 onDeleteJob={handleDeleteJob}
                 onQuickClose={handleQuickClose}
@@ -924,13 +957,13 @@ function App() {
                 onViewDetail={handleViewDetail}
               />
             </div>
-          </> 
+          </>
         ) : currentPage === 'time' ? (
           <>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8 mb-8">
               {/* Time Tracking Form */}
               <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-                <TimeTrackingForm 
+                <TimeTrackingForm
                   onSubmit={handleAddTimeRecord}
                   timeRecords={timeRecords}
                   onShowAlert={showAlert}
@@ -943,7 +976,7 @@ function App() {
                   <Clock className="text-purple-600 mr-2" size={20} />
                   <h2 className="text-lg sm:text-xl font-semibold text-purple-600">สรุปเวลาทำงาน</h2>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="text-center p-3 sm:p-4 bg-purple-50 rounded-lg">
                     <div className="text-xl sm:text-2xl font-bold text-purple-600">
@@ -973,7 +1006,7 @@ function App() {
               </div>
             </div>
 
-            <TimeRecordsList 
+            <TimeRecordsList
               records={getFilteredTimeRecords()}
               onDeleteRecord={handleDeleteTimeRecord}
               filters={timeRecordFilters}
@@ -988,7 +1021,7 @@ function App() {
                 <Calendar className="text-green-600 mr-3" size={24} />
                 <h2 className="text-xl font-semibold text-gray-800">กรองข้อมูลตามวันที่</h2>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="startDate">
@@ -1002,7 +1035,7 @@ function App() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="endDate">
                     วันที่สิ้นสุด
@@ -1015,7 +1048,7 @@ function App() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                 </div>
-                
+
                 <div className="flex items-end">
                   <button
                     onClick={() => setDateRange({ startDate: '', endDate: '' })}
@@ -1028,7 +1061,7 @@ function App() {
             </div>
 
             <SummaryPage timeRecords={timeRecords} jobs={jobs} />
-            
+
             {/* Debug Info */}
             <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
               <div className="text-sm text-yellow-800">
@@ -1045,16 +1078,16 @@ function App() {
 
       {/* Image Modal */}
       {selectedImage && (
-        <ImageModal 
-          image={selectedImage} 
-          onClose={() => setSelectedImage(null)} 
+        <ImageModal
+          image={selectedImage}
+          onClose={() => setSelectedImage(null)}
         />
       )}
 
       {/* Job Detail Modal */}
       {selectedJob && (
-        <JobDetailModal 
-          job={selectedJob} 
+        <JobDetailModal
+          job={selectedJob}
           onClose={() => setSelectedJob(null)}
           onAddAdditionalImages={handleAddAdditionalImages}
           onDeleteImage={handleDeleteImage}
@@ -1063,8 +1096,8 @@ function App() {
 
       {/* Notification */}
       {notification.show && (
-        <Notification 
-          message={notification.message} 
+        <Notification
+          message={notification.message}
           type={notification.type}
           onClose={() => setNotification({ show: false, message: '', type: 'success' })}
         />
