@@ -196,15 +196,25 @@ const CloseJobForm = ({ jobs, onSubmit, disabled }) => {
         {formData.closeImages.length > 0 && (
           <div className="mt-4 grid grid-cols-3 gap-2">
             {formData.closeImages.map(image => (
-              <div key={image.id} className="image-preview">
+              <div key={image.id} className="image-preview relative">
                 <img src={image.data} alt={image.name} />
                 <button
                   type="button"
-                  className="remove-btn"
-                  onClick={() => removeImage(image.id)}
+                  className="remove-btn absolute top-1 right-1 bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center z-10 touch-manipulation"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    removeImage(image.id);
+                  }}
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    removeImage(image.id);
+                  }}
                   disabled={disabled}
+                  aria-label="ลบรูปภาพ"
                 >
-                  <X size={12} />
+                  <X size={16} />
                 </button>
               </div>
             ))}
