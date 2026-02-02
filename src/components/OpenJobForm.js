@@ -21,7 +21,7 @@ const OpenJobForm = ({ onSubmit, electricalResponsibleUsers }) => {
 
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);
-    
+
     files.forEach(file => {
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
@@ -51,7 +51,7 @@ const OpenJobForm = ({ onSubmit, electricalResponsibleUsers }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
     if (!formData.machineName.trim()) {
       alert('กรุณากรอกชื่อเครื่องจักร');
       return;
@@ -63,11 +63,17 @@ const OpenJobForm = ({ onSubmit, electricalResponsibleUsers }) => {
       machineName: formData.machineName,
       jobName: formData.machineName, // Use machineName as jobName for folder naming
       openDate: formData.openDate,
+      openImages: formData.openImages.map(img => ({
+        id: img.id,
+        name: img.name,
+        data: img.data
+      })),
+      electricalResponsible: formData.electricalResponsible,
       imageFile: imageFile
     };
-    
+
     onSubmit(submitData);
-    
+
     setFormData({
       machineName: '',
       openDate: new Date().toISOString().split('T')[0],
@@ -147,7 +153,7 @@ const OpenJobForm = ({ onSubmit, electricalResponsibleUsers }) => {
             <p className="text-sm text-gray-600">คลิกเพื่อเลือกรูปภาพ (สามารถเลือกได้หลายรูป)</p>
           </label>
         </div>
-        
+
         {formData.openImages.length > 0 && (
           <div className="mt-4 grid grid-cols-3 gap-2">
             {formData.openImages.map(image => (
