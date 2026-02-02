@@ -18,7 +18,12 @@ const JobDetailModal = ({ job, onClose, onAddAdditionalImages, onDeleteImage }) 
 
   const openImages = useMemo(() => job?.open_images || job?.openImages || [], [job?.open_images, job?.openImages]);
   const closeImages = useMemo(() => job?.close_images || job?.closeImages || [], [job?.close_images, job?.closeImages]);
-  const allImages = useMemo(() => [...openImages, ...closeImages], [openImages, closeImages]);
+
+  // Add 'type' property to each image so delete function knows which array to delete from
+  const allImages = useMemo(() => [
+    ...openImages.map(img => ({ ...img, type: 'open' })),
+    ...closeImages.map(img => ({ ...img, type: 'close' }))
+  ], [openImages, closeImages]);
 
   // Reset currentImageIndex when allImages changes to prevent out of bounds
   useEffect(() => {
@@ -46,7 +51,7 @@ const JobDetailModal = ({ job, onClose, onAddAdditionalImages, onDeleteImage }) 
 
   const handleAdditionalImageUpload = (e, imageType) => {
     const files = Array.from(e.target.files);
-    
+
     files.forEach(file => {
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
@@ -72,12 +77,12 @@ const JobDetailModal = ({ job, onClose, onAddAdditionalImages, onDeleteImage }) 
     if (additionalImages.length === 0) {
       return;
     }
-    
+
     setIsUploading(true);
-    
+
     try {
       await onAddAdditionalImages(job.id, additionalImages, imageType);
-      
+
       setAdditionalImages([]);
       if (imageType === 'open') {
         setShowOpenUpload(false);
@@ -161,14 +166,14 @@ const JobDetailModal = ({ job, onClose, onAddAdditionalImages, onDeleteImage }) 
             <div className="space-y-4">
               <div className="bg-gray-50 rounded-lg p-4">
                 <h3 className="font-semibold text-lg mb-3 text-gray-800">ข้อมูลงาน</h3>
-                
+
                 <div className="space-y-3">
                   <div className="flex items-center text-sm">
                     <CalendarPlus className="mr-2 text-blue-600" size={16} />
                     <span className="font-medium">วันที่เปิดงาน:</span>
                     <span className="ml-2">{formatDate(job.open_date || job.openDate)}</span>
                   </div>
-                  
+
                   {job.close_date && (
                     <div className="flex items-center text-sm">
                       <CalendarCheck className="mr-2 text-green-600" size={16} />
@@ -176,13 +181,13 @@ const JobDetailModal = ({ job, onClose, onAddAdditionalImages, onDeleteImage }) 
                       <span className="ml-2">{formatDate(job.close_date)}</span>
                     </div>
                   )}
-                  
+
                   <div className="flex items-center text-sm">
                     <User className="mr-2 text-purple-600" size={16} />
                     <span className="font-medium">ผู้รับผิดชอบ:</span>
                     <span className="ml-2">{job.user_name || 'Unknown'}</span>
                   </div>
-                  
+
                   {job.electrical_responsible && (
                     <div className="flex items-center text-sm">
                       <User className="mr-2 text-yellow-600" size={16} />
@@ -190,15 +195,14 @@ const JobDetailModal = ({ job, onClose, onAddAdditionalImages, onDeleteImage }) 
                       <span className="ml-2">{job.electrical_responsible}</span>
                     </div>
                   )}
-                  
+
                   <div className="flex items-center text-sm">
                     <Clock className="mr-2 text-orange-600" size={16} />
                     <span className="font-medium">สถานะ:</span>
-                    <span className={`ml-2 px-2 py-1 rounded text-xs font-medium ${
-                      job.status === 'open' 
-                        ? 'bg-blue-100 text-blue-800' 
+                    <span className={`ml-2 px-2 py-1 rounded text-xs font-medium ${job.status === 'open'
+                        ? 'bg-blue-100 text-blue-800'
                         : 'bg-green-100 text-green-800'
-                    }`}>
+                      }`}>
                       {job.status === 'open' ? 'เปิด' : 'ปิดแล้ว'}
                     </span>
                   </div>
@@ -230,7 +234,7 @@ const JobDetailModal = ({ job, onClose, onAddAdditionalImages, onDeleteImage }) 
                     )}
                   </div>
                 </div>
-                
+
                 {openImages.length > 0 && (
                   <div className="mb-4">
                     <p className="text-sm font-medium text-gray-700 mb-2">
@@ -300,7 +304,7 @@ const JobDetailModal = ({ job, onClose, onAddAdditionalImages, onDeleteImage }) 
             {/* Image Viewer */}
             <div className="bg-gray-50 rounded-lg p-4">
               <h3 className="font-semibold text-lg mb-3 text-gray-800">ดูรูปภาพ</h3>
-              
+
               {allImages.length > 0 && allImages[currentImageIndex] ? (
                 <div className="relative">
                   <div className="relative bg-white rounded-lg overflow-hidden" style={{ height: '400px' }}>
@@ -309,7 +313,7 @@ const JobDetailModal = ({ job, onClose, onAddAdditionalImages, onDeleteImage }) 
                       alt={allImages[currentImageIndex].name || 'รูปภาพ'}
                       className="w-full h-full object-contain"
                     />
-                    
+
                     {/* Navigation Buttons */}
                     {allImages.length > 1 && (
                       <>
@@ -327,7 +331,7 @@ const JobDetailModal = ({ job, onClose, onAddAdditionalImages, onDeleteImage }) 
                         </button>
                       </>
                     )}
-                    
+
                     {/* Download Button */}
                     <button
                       onClick={() => {
@@ -341,7 +345,7 @@ const JobDetailModal = ({ job, onClose, onAddAdditionalImages, onDeleteImage }) 
                     >
                       <Download size={16} />
                     </button>
-                    
+
                     {/* Delete Button */}
                     <button
                       onClick={() => {
@@ -356,14 +360,14 @@ const JobDetailModal = ({ job, onClose, onAddAdditionalImages, onDeleteImage }) 
                       <Trash2 size={16} />
                     </button>
                   </div>
-                  
+
                   {/* Image Info */}
                   <div className="mt-3 text-center">
                     <p className="text-sm text-gray-700 font-medium">
                       {allImages[currentImageIndex]?.name || 'รูปภาพ'}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {allImages[currentImageIndex]?.type === 'open' ? 'รูปภาพการเปิดงาน' : 'รูปภาพการปิดงาน'} • 
+                      {allImages[currentImageIndex]?.type === 'open' ? 'รูปภาพการเปิดงาน' : 'รูปภาพการปิดงาน'} •
                       รูปที่ {currentImageIndex + 1} จาก {allImages.length}
                     </p>
                   </div>
@@ -400,7 +404,7 @@ const JobDetailModal = ({ job, onClose, onAddAdditionalImages, onDeleteImage }) 
                 </button>
               </div>
             </div>
-            
+
             <div className="p-4">
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -414,7 +418,7 @@ const JobDetailModal = ({ job, onClose, onAddAdditionalImages, onDeleteImage }) 
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
-              
+
               {additionalImages.length > 0 && (
                 <div className="mb-4">
                   <p className="text-sm font-medium text-gray-700 mb-2">
@@ -439,7 +443,7 @@ const JobDetailModal = ({ job, onClose, onAddAdditionalImages, onDeleteImage }) 
                   </div>
                 </div>
               )}
-              
+
               <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setShowOpenUpload(false)}
@@ -476,7 +480,7 @@ const JobDetailModal = ({ job, onClose, onAddAdditionalImages, onDeleteImage }) 
                 </button>
               </div>
             </div>
-            
+
             <div className="p-4">
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -490,7 +494,7 @@ const JobDetailModal = ({ job, onClose, onAddAdditionalImages, onDeleteImage }) 
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
-              
+
               {additionalImages.length > 0 && (
                 <div className="mb-4">
                   <p className="text-sm font-medium text-gray-700 mb-2">
@@ -515,7 +519,7 @@ const JobDetailModal = ({ job, onClose, onAddAdditionalImages, onDeleteImage }) 
                   </div>
                 </div>
               )}
-              
+
               <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setShowCloseUpload(false)}

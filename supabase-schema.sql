@@ -1,21 +1,28 @@
 -- Supabase Database Schema for Job Management System
+-- Last Updated: 2026-02-02
 
 -- Enable necessary extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- ============================================
+-- TABLES
+-- ============================================
+
 -- Create allowed_users table for authentication allowlist
-CREATE TABLE allowed_users (
+CREATE TABLE IF NOT EXISTS allowed_users (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   email VARCHAR(255) UNIQUE NOT NULL,
   user_name VARCHAR(255),
-  position VARCHAR(255), -- เพิ่มฟิลด์ตำแหน่งที่รับผิดชอบ
-  is_electrical_responsible BOOLEAN DEFAULT FALSE, -- เพิ่มฟิลด์ระบุว่าเป็นผู้รับผิดชอบระบบไฟฟ้าหรือไม่
+  position VARCHAR(255),
+  is_electrical_responsible BOOLEAN DEFAULT FALSE,
+  wage_rate DECIMAL(10, 2) DEFAULT 0.00,
+  ot_rate DECIMAL(10, 2) DEFAULT 0.00,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create jobs table
-CREATE TABLE jobs (
+CREATE TABLE IF NOT EXISTS jobs (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   machine_name VARCHAR(255) NOT NULL,
   job_name VARCHAR(255) NOT NULL,
@@ -30,13 +37,13 @@ CREATE TABLE jobs (
   close_drive_file_link TEXT,
   user_email VARCHAR(255) NOT NULL,
   user_name VARCHAR(255),
-  electrical_responsible VARCHAR(255), -- เพิ่มฟิลด์ผู้รับผิดชอบระบบไฟฟ้า
+  electrical_responsible VARCHAR(255),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create time_records table
-CREATE TABLE time_records (
+CREATE TABLE IF NOT EXISTS time_records (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   date DATE NOT NULL,
   machine_id VARCHAR(255) NOT NULL,
@@ -52,90 +59,6 @@ CREATE TABLE time_records (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create updated_at trigger function
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ language 'plpgsql';
-
--- Create triggers for updated_at
-CREATE TRIGGER update_allowed_users_updated_at BEFORE UPDATE ON allowed_users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_jobs_updated_at BEFORE UPDATE ON jobs FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- Row Level Security (RLS)
-ALTER TABLE allowed_users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE jobs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE time_records ENABLE ROW LEVEL SECURITY;
-
--- Policies for allowed_users table (only admin can manage)
-CREATE POLICY "Admins can view all allowed users" ON allowed_users FOR SELECT USING (
-  auth.jwt() ->> 'email' = 'aooolykung@gmail.com'
-);
-
-CREATE POLICY "Admins can insert allowed users" ON allowed_users FOR INSERT WITH CHECK (
-  auth.jwt() ->> 'email' = 'aooolykung@gmail.com'
-);
-
-CREATE POLICY "Admins can update allowed users" ON allowed_users FOR UPDATE USING (
-  auth.jwt() ->> 'email' = 'aooolykung@gmail.com'
-);
-
-CREATE POLICY "Admins can delete allowed users" ON allowed_users FOR DELETE USING (
-  auth.jwt() ->> 'email' = 'aooolykung@gmail.com'
-);
-
--- Policies for jobs table
-CREATE POLICY "Users can view own jobs" ON jobs FOR SELECT USING (
-  auth.jwt() ->> 'email' = user_email OR
-  auth.jwt() ->> 'email' = 'aooolykung@gmail.com'
-);
-
-CREATE POLICY "Users can insert own jobs" ON jobs FOR INSERT WITH CHECK (
-  auth.jwt() ->> 'email' = user_email
-);
-
-CREATE POLICY "Users can update own jobs" ON jobs FOR UPDATE USING (
-  auth.jwt() ->> 'email' = user_email OR
-  auth.jwt() ->> 'email' = 'aooolykung@gmail.com'
-);
-
-CREATE POLICY "Users can delete own jobs" ON jobs FOR DELETE USING (
-  auth.jwt() ->> 'email' = user_email OR
-  auth.jwt() ->> 'email' = 'aooolykung@gmail.com'
-);
-
--- Policies for time_records table
-CREATE POLICY "Users can view own time records" ON time_records FOR SELECT USING (
-  auth.jwt() ->> 'email' = user_email OR
-  auth.jwt() ->> 'email' = 'aooolykung@gmail.com'
-);
-
-CREATE POLICY "Users can insert own time records" ON time_records FOR INSERT WITH CHECK (
-  auth.jwt() ->> 'email' = user_email
-);
-
-CREATE POLICY "Users can update own time records" ON time_records FOR UPDATE USING (
-  auth.jwt() ->> 'email' = user_email OR
-  auth.jwt() ->> 'email' = 'aooolykung@gmail.com'
-);
-
-CREATE POLICY "Users can delete own time records" ON time_records FOR DELETE USING (
-  auth.jwt() ->> 'email' = user_email OR
-  auth.jwt() ->> 'email' = 'aooolykung@gmail.com'
-);
-
--- Indexes for better performance
-CREATE INDEX idx_jobs_user_email ON jobs(user_email);
-CREATE INDEX idx_jobs_status ON jobs(status);
-CREATE INDEX idx_jobs_created_at ON jobs(created_at);
-CREATE INDEX idx_time_records_user_email ON time_records(user_email);
-CREATE INDEX idx_time_records_date ON time_records(date);
-CREATE INDEX idx_time_records_created_at ON time_records(created_at);
-CREATE INDEX idx_allowed_users_email ON allowed_users(email);
-
 -- Create machine_costcenter table
 CREATE TABLE IF NOT EXISTS machine_costcenter (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -145,12 +68,171 @@ CREATE TABLE IF NOT EXISTS machine_costcenter (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Add wage_rate and ot_rate to allowed_users table
-ALTER TABLE allowed_users 
-ADD COLUMN IF NOT EXISTS wage_rate DECIMAL(10, 2) DEFAULT 0.00,
-ADD COLUMN IF NOT EXISTS ot_rate DECIMAL(10, 2) DEFAULT 0.00;
+-- ============================================
+-- FUNCTIONS (with search_path set for security)
+-- ============================================
 
--- Insert machine costcenter data
+-- Create updated_at trigger function with security-compliant search_path
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
+-- ============================================
+-- TRIGGERS
+-- ============================================
+
+-- Drop existing triggers if they exist
+DROP TRIGGER IF EXISTS update_allowed_users_updated_at ON allowed_users;
+DROP TRIGGER IF EXISTS update_jobs_updated_at ON jobs;
+DROP TRIGGER IF EXISTS update_machine_costcenter_updated_at ON machine_costcenter;
+
+-- Create triggers for updated_at
+CREATE TRIGGER update_allowed_users_updated_at 
+  BEFORE UPDATE ON allowed_users 
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_jobs_updated_at 
+  BEFORE UPDATE ON jobs 
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_machine_costcenter_updated_at 
+  BEFORE UPDATE ON machine_costcenter 
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================
+-- INDEXES
+-- ============================================
+
+CREATE INDEX IF NOT EXISTS idx_jobs_user_email ON jobs(user_email);
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at);
+CREATE INDEX IF NOT EXISTS idx_time_records_user_email ON time_records(user_email);
+CREATE INDEX IF NOT EXISTS idx_time_records_date ON time_records(date);
+CREATE INDEX IF NOT EXISTS idx_time_records_created_at ON time_records(created_at);
+CREATE INDEX IF NOT EXISTS idx_allowed_users_email ON allowed_users(email);
+
+-- ============================================
+-- ROW LEVEL SECURITY (RLS)
+-- ============================================
+
+-- Enable RLS on all tables
+ALTER TABLE public.allowed_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.machine_costcenter ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.time_records ENABLE ROW LEVEL SECURITY;
+
+-- ============================================
+-- POLICIES: allowed_users
+-- Anyone can view, only admin can modify
+-- ============================================
+
+DROP POLICY IF EXISTS "Anyone can view allowed_users" ON public.allowed_users;
+DROP POLICY IF EXISTS "Admins can insert allowed_users" ON public.allowed_users;
+DROP POLICY IF EXISTS "Admins can update allowed_users" ON public.allowed_users;
+DROP POLICY IF EXISTS "Admins can delete allowed_users" ON public.allowed_users;
+
+CREATE POLICY "Anyone can view allowed_users" ON public.allowed_users 
+FOR SELECT USING (true);
+
+CREATE POLICY "Admins can insert allowed_users" ON public.allowed_users 
+FOR INSERT WITH CHECK ((select auth.jwt()) ->> 'email' = 'aooolykung@gmail.com');
+
+CREATE POLICY "Admins can update allowed_users" ON public.allowed_users 
+FOR UPDATE USING ((select auth.jwt()) ->> 'email' = 'aooolykung@gmail.com');
+
+CREATE POLICY "Admins can delete allowed_users" ON public.allowed_users 
+FOR DELETE USING ((select auth.jwt()) ->> 'email' = 'aooolykung@gmail.com');
+
+-- ============================================
+-- POLICIES: machine_costcenter
+-- Anyone can view, only admin can modify
+-- ============================================
+
+DROP POLICY IF EXISTS "Anyone can view machine_costcenter" ON public.machine_costcenter;
+DROP POLICY IF EXISTS "Admins can insert machine_costcenter" ON public.machine_costcenter;
+DROP POLICY IF EXISTS "Admins can update machine_costcenter" ON public.machine_costcenter;
+DROP POLICY IF EXISTS "Admins can delete machine_costcenter" ON public.machine_costcenter;
+
+CREATE POLICY "Anyone can view machine_costcenter" ON public.machine_costcenter 
+FOR SELECT USING (true);
+
+CREATE POLICY "Admins can insert machine_costcenter" ON public.machine_costcenter 
+FOR INSERT WITH CHECK ((select auth.jwt()) ->> 'email' = 'aooolykung@gmail.com');
+
+CREATE POLICY "Admins can update machine_costcenter" ON public.machine_costcenter 
+FOR UPDATE USING ((select auth.jwt()) ->> 'email' = 'aooolykung@gmail.com');
+
+CREATE POLICY "Admins can delete machine_costcenter" ON public.machine_costcenter 
+FOR DELETE USING ((select auth.jwt()) ->> 'email' = 'aooolykung@gmail.com');
+
+-- ============================================
+-- POLICIES: jobs
+-- Authenticated users can view all, modify own or admin
+-- ============================================
+
+DROP POLICY IF EXISTS "Authenticated users can view all jobs" ON public.jobs;
+DROP POLICY IF EXISTS "Users can insert own jobs" ON public.jobs;
+DROP POLICY IF EXISTS "Users can update own jobs or admin" ON public.jobs;
+DROP POLICY IF EXISTS "Users can delete own jobs or admin" ON public.jobs;
+
+CREATE POLICY "Authenticated users can view all jobs" ON public.jobs 
+FOR SELECT USING ((select auth.role()) = 'authenticated');
+
+CREATE POLICY "Users can insert own jobs" ON public.jobs 
+FOR INSERT WITH CHECK ((select auth.jwt()) ->> 'email' = user_email);
+
+CREATE POLICY "Users can update own jobs or admin" ON public.jobs 
+FOR UPDATE USING (
+  (select auth.jwt()) ->> 'email' = user_email 
+  OR (select auth.jwt()) ->> 'email' = 'aooolykung@gmail.com'
+);
+
+CREATE POLICY "Users can delete own jobs or admin" ON public.jobs 
+FOR DELETE USING (
+  (select auth.jwt()) ->> 'email' = user_email 
+  OR (select auth.jwt()) ->> 'email' = 'aooolykung@gmail.com'
+);
+
+-- ============================================
+-- POLICIES: time_records
+-- Authenticated users can view all, modify own or admin
+-- ============================================
+
+DROP POLICY IF EXISTS "Authenticated users can view all time_records" ON public.time_records;
+DROP POLICY IF EXISTS "Users can insert own time_records" ON public.time_records;
+DROP POLICY IF EXISTS "Users can update own time_records or admin" ON public.time_records;
+DROP POLICY IF EXISTS "Users can delete own time_records or admin" ON public.time_records;
+
+CREATE POLICY "Authenticated users can view all time_records" ON public.time_records 
+FOR SELECT USING ((select auth.role()) = 'authenticated');
+
+CREATE POLICY "Users can insert own time_records" ON public.time_records 
+FOR INSERT WITH CHECK ((select auth.jwt()) ->> 'email' = user_email);
+
+CREATE POLICY "Users can update own time_records or admin" ON public.time_records 
+FOR UPDATE USING (
+  (select auth.jwt()) ->> 'email' = user_email 
+  OR (select auth.jwt()) ->> 'email' = 'aooolykung@gmail.com'
+);
+
+CREATE POLICY "Users can delete own time_records or admin" ON public.time_records 
+FOR DELETE USING (
+  (select auth.jwt()) ->> 'email' = user_email 
+  OR (select auth.jwt()) ->> 'email' = 'aooolykung@gmail.com'
+);
+
+-- ============================================
+-- SEED DATA: Machine Costcenter
+-- ============================================
+
 INSERT INTO machine_costcenter (machine_id, costcenter) VALUES
 ('GID01A', '501103'), ('GID02A', '501103'), ('GID03A', '501202'),
 ('VAC01A', '501105'), ('VAC02A', '501105'), ('VAC03A', '501105'), ('VAC04A', '501105'), ('VAC06A', '501204'),
@@ -209,29 +291,20 @@ INSERT INTO machine_costcenter (machine_id, costcenter) VALUES
 ('HSM01B', '501205'), ('HSM02B', '501205'), ('KON02B', '501102'), ('AMC01B', '501201'), ('BLO01B', '501102'), ('MTV01B', '501202'), ('MMS01B', '501103'), ('MMS02B', '501103'), ('MMS03B', '501202'), ('FSF01B', '501104'), ('STM01B', '501205'), ('STM02B', '501205'), ('STM03B', '501206'), ('STM04B', '501206'), ('VCC01B', '501204'), ('HSO02B', '501205'), ('BWG01B', '501105'), ('BWG02B', '501205'), ('ARC01B', '501204'), ('ARC02B', '501205'), ('BCM01B', '501205'), ('COV01B', '501205'), ('AFO01B', '501105'), ('STF01B', '501108'), ('STF05B', '501108'), ('STF06B', '501108'), ('ROB01B', '501108'), ('ROB02B', '501108'), ('BCF03B', '501205'), ('BCF04B', '501205'), ('BCF05B', '501206'), ('BCF06B', '501206'), ('ATS03B', '501206'), ('WMG01B', '501205'), ('FEG01B', '501205'), ('FEG02B', '501205'), ('GLC01B', '501205'), ('GLC02B', '501205'), ('GLC03B', '501205'), ('SEP01B', '501105'), ('RET01B', '503107'), ('NOD01B', '501205'), ('RKP01B', '501201')
 ON CONFLICT (machine_id) DO NOTHING;
 
--- Enable RLS for machine_costcenter table
-ALTER TABLE machine_costcenter ENABLE ROW LEVEL SECURITY;
+-- ============================================
+-- SEED DATA: Sample Users
+-- ============================================
 
--- Create policies for machine_costcenter table
-CREATE POLICY "Anyone can view machine costcenter" ON machine_costcenter FOR SELECT USING (true);
-
-CREATE POLICY "Admins can insert machine costcenter" ON machine_costcenter FOR INSERT WITH CHECK (
-  auth.jwt() ->> 'email' = 'aooolykung@gmail.com'
-);
-
-CREATE POLICY "Admins can update machine costcenter" ON machine_costcenter FOR UPDATE USING (
-  auth.jwt() ->> 'email' = 'aooolykung@gmail.com'
-);
-
-CREATE POLICY "Admins can delete machine costcenter" ON machine_costcenter FOR DELETE USING (
-  auth.jwt() ->> 'email' = 'aooolykung@gmail.com'
-);
-
--- Insert admin email into allowed_users (you can remove this if you want to add it manually)
+-- Insert admin user
 INSERT INTO allowed_users (email, user_name, position, is_electrical_responsible, wage_rate, ot_rate) VALUES 
-('aooolykung@gmail.com', 'วสันต์ นราแก้ว', 'ผู้ดูแลระบบ', FALSE, 350.00, 1.5);
+('aooolykung@gmail.com', 'วสันต์ นราแก้ว', 'ผู้ดูแลระบบ', FALSE, 350.00, 525.00)
+ON CONFLICT (email) DO NOTHING;
 
--- Insert sample electrical responsible users
-INSERT INTO allowed_users (email, user_name, position, is_electrical_responsible, wage_rate, ot_rate) VALUES 
-('electrical1@company.com', 'สมชาย ใจดี', 'ช่างไฟฟ้า', TRUE, 300.00, 1.5),
-('electrical2@company.com', 'สมศรี รักงาน', 'วิศวกรไฟฟ้า', TRUE, 300.00, 1.5);
+-- ============================================
+-- NOTES:
+-- ============================================
+-- 1. All auth.jwt() and auth.role() calls are wrapped in (select ...) for performance
+-- 2. Function update_updated_at_column has search_path set for security
+-- 3. Each table has only one policy per action to avoid multiple permissive policies
+-- 4. Leaked Password Protection should be enabled in Supabase Dashboard:
+--    Go to Authentication > Settings > Security > Enable "Leaked password protection"

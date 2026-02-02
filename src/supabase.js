@@ -289,9 +289,12 @@ export const addAdditionalImages = async (jobId, newImages, imageType = 'close')
       .from('jobs')
       .select('*')
       .eq('id', jobId)
-      .single();
+      .maybeSingle();
 
     if (fetchError) throw fetchError;
+    if (!currentJob) {
+      throw new Error('Job not found or access denied');
+    }
 
     // Add new images to existing images
     const existingImages = currentJob[imageType + '_images'] || [];
@@ -306,9 +309,12 @@ export const addAdditionalImages = async (jobId, newImages, imageType = 'close')
       })
       .eq('id', jobId)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) throw error;
+    if (!data) {
+      throw new Error('Failed to update job - access denied');
+    }
 
     return data;
   } catch (error) {
@@ -320,32 +326,65 @@ export const addAdditionalImages = async (jobId, newImages, imageType = 'close')
 // Delete specific image from job
 export const deleteJobImage = async (jobId, imageId, imageType = 'close') => {
   try {
+    console.log('🗑️ deleteJobImage called:', { jobId, imageId, imageType });
+
     // Get current job data
     const { data: currentJob, error: fetchError } = await supabase
       .from('jobs')
       .select('*')
       .eq('id', jobId)
-      .single();
+      .maybeSingle();
 
-    if (fetchError) throw fetchError;
+    if (fetchError) {
+      console.error('🗑️ Fetch error:', fetchError);
+      throw fetchError;
+    }
+    if (!currentJob) {
+      console.error('🗑️ Job not found:', jobId);
+      throw new Error('Job not found or access denied');
+    }
+
+    console.log('🗑️ Current job:', currentJob.id, currentJob.machine_name);
 
     // Remove specific image from existing images
-    const existingImages = currentJob[imageType + '_images'] || [];
-    const updatedImages = existingImages.filter(img => img.id !== imageId);
+    const columnName = imageType + '_images';
+    const existingImages = currentJob[columnName] || [];
+
+    console.log('🗑️ Existing images in', columnName, ':', existingImages.length);
+    console.log('🗑️ Looking for imageId:', imageId, 'type:', typeof imageId);
+
+    // Convert both to string for comparison to handle number vs string mismatch
+    const updatedImages = existingImages.filter(img => {
+      const imgIdStr = String(img.id);
+      const targetIdStr = String(imageId);
+      const keepImage = imgIdStr !== targetIdStr;
+      console.log('🗑️ Comparing:', imgIdStr, 'vs', targetIdStr, '-> keep:', keepImage);
+      return keepImage;
+    });
+
+    console.log('🗑️ Images after filter:', updatedImages.length);
 
     // Update job with remaining images
     const { data, error } = await supabase
       .from('jobs')
       .update({
-        [imageType + '_images']: updatedImages,
+        [columnName]: updatedImages,
         updated_at: new Date().toISOString()
       })
       .eq('id', jobId)
       .select()
-      .single();
+      .maybeSingle();
 
-    if (error) throw error;
+    if (error) {
+      console.error('🗑️ Update error:', error);
+      throw error;
+    }
+    if (!data) {
+      console.error('🗑️ No data returned after update');
+      throw new Error('Failed to update job - access denied');
+    }
 
+    console.log('🗑️ Successfully deleted image, remaining:', data[columnName]?.length || 0);
     return data;
   } catch (error) {
     console.error('🗑️ supabase.js - Error deleting job image:', error);
